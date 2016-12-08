@@ -1,0 +1,2 @@
+model_checkpoint_path: "/Users/norabarry/Downloads/NLP/Project/BlackHoles/ptb/runs/1481156480/checkpoints/model.ckpt-0"
+all_model_checkpoint_paths: "/Users/norabarry/Downloads/NLP/Project/BlackHoles/ptb/runs/1481156480/checkpoints/model.ckpt-0"
