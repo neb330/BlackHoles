@@ -94,7 +94,8 @@ class PTBInput(object):
   def __init__(self, config, data, name=None):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
-    self.epoch_size = ((len(data) // batch_size) - 1) // num_steps
+    print(len(data), batch_size, num_steps)
+    self.epize = ((len(data) // batch_size) - 1) // num_steps
     self.input_data, self.targets = reader.ptb_producer(
         data, batch_size, num_steps, name=name)
 
@@ -209,14 +210,14 @@ class SmallConfig(object):
   learning_rate = 0.1
   max_grad_norm = 5
   num_layers = 2
-  num_steps = 20
+  num_steps = 99
   hidden_size = 500
   max_epoch = 4
   max_max_epoch = 13
   keep_prob = 1.0
   lr_decay = 0.5
-  batch_size = 20
-  vocab_size = 10000
+  batch_size = 1
+  vocab_size = 10002
 
 
 class MediumConfig(object):
@@ -231,8 +232,8 @@ class MediumConfig(object):
   max_max_epoch = 39
   keep_prob = 0.5
   lr_decay = 0.8
-  batch_size = 20
-  vocab_size = 10000
+  batch_size = 10
+  vocab_size = 10002
 
 
 class LargeConfig(object):
@@ -248,7 +249,7 @@ class LargeConfig(object):
   keep_prob = 0.35
   lr_decay = 1 / 1.15
   batch_size = 20
-  vocab_size = 10000
+  vocab_size = 10002
 
 
 class TestConfig(object):
@@ -289,11 +290,11 @@ def run_epoch(session, model, eval_op=None, verbose=False):
 
     vals = session.run(fetches)
     cost = vals["cost"]
-    state = vals["final_state"]
+    states = vals["final_state"]
 
     costs += cost
     iters += model.input.num_steps
-
+    #print(model.input.epoch_size)
     if verbose and step % (model.input.epoch_size // 10) == 10:
       print("%.3f perplexity: %.3f speed: %.0f wps" %
             (step * 1.0 / model.input.epoch_size, np.exp(costs / iters),

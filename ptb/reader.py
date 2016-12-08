@@ -21,14 +21,29 @@ from __future__ import print_function
 
 import collections
 import os
+import numpy as np
 
 import tensorflow as tf
 
+max_document_length = 100
 
 def _read_words(filename):
+  raw_data = []
   with tf.gfile.GFile(filename, "r") as f:
-#return f.read().decode("utf-8").split(" ")
-    return f.read().decode("utf-8").strip().replace("\r\n", " 2 ").split(" ")
+    for line in f:
+        sentence = line.strip().replace("\r\n", "").split(" ")
+        sentence = [int(word) for word in sentence if word!='']
+        if len(sentence) < max_document_length:
+            temp = sentence
+            for i in range(max_document_length - len(sentence)):
+                temp.append(10001)
+            sentence = temp
+        elif len(sentence) >= max_document_length:
+            sentence = sentence[:max_document_length]
+        raw_data.append(sentence)
+  return raw_data
+
+
 
 
 def _build_vocab(filename):
@@ -45,8 +60,7 @@ def _build_vocab(filename):
 
 def _file_to_word_ids(filename):
   data = _read_words(filename)
-#  return data_clean
-  return [int(word) for word in data]
+  return data
 
 
 def ptb_raw_data(data_path=None):
@@ -130,23 +144,29 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
   Raises:
     tf.errors.InvalidArgumentError: if batch_size or num_steps are too high.
   """
-  #print(len(raw_data))
+
   with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
-    raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
+      #raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
+    raw_data = np.array(raw_data)
+    data_len = raw_data.shape[0]
+    batch_len = int(data_len) // batch_size
+        #data = tf.reshape(raw_data[0 : batch_size, :],
+        #[batch_size, max_document_length])
 
-    data_len = tf.size(raw_data)
-    batch_len = data_len // batch_size
-    data = tf.reshape(raw_data[0 : batch_size * batch_len],
-                      [batch_size, batch_len])
-
-    epoch_size = (batch_len - 1) // num_steps
+    epoch_size = (batch_len) // num_steps
     assertion = tf.assert_positive(
         epoch_size,
         message="epoch_size == 0, decrease batch_size or num_steps")
     with tf.control_dependencies([assertion]):
       epoch_size = tf.identity(epoch_size, name="epoch_size")
 
-    i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue()
-    x = tf.slice(data, [0, i * num_steps], [batch_size, num_steps])
-    y = tf.slice(data, [0, i * num_steps + 1], [batch_size, num_steps])
+#i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue()
+    i = np.random.randint(0,data_len-1)
+    x = raw_data[0, :max_document_length-1]
+    y = raw_data[0, 1:max_document_length]
+    print(x.shape, y.shape)
+    x = tf.convert_to_tensor(x, name="x", dtype=tf.int32)
+    y = tf.convert_to_tensor(y, name="y", dtype=tf.int32)
+    #x = tf.slice(data, [0,0], [batch_size, max_document_length-1])
+    #y = tf.slice(data, [0,1], [batch_size, max_document_length])
     return x, y
