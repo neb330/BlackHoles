@@ -28,7 +28,7 @@ import tensorflow as tf
 def _read_words(filename):
   with tf.gfile.GFile(filename, "r") as f:
 #return f.read().decode("utf-8").split(" ")
-    return f.read().decode("utf-8").strip().replace("\r\n", " <eos> ").split(" ")
+    return f.read().decode("utf-8").strip().replace("\r\n", " 2 ").split(" ")
 
 
 def _build_vocab(filename):
@@ -45,13 +45,8 @@ def _build_vocab(filename):
 
 def _file_to_word_ids(filename):
   data = _read_words(filename)
-  data = ' '.join(data)
-  data_clean = []
-  sentences = data.split(' <eos> ')
-  for s in sentences:
-    data_clean.append([int(word) for word in data if word != ' '])
-  return data_clean
-                      #return [int(word) for word in data if word != '<eos>']
+#  return data_clean
+  return [int(word) for word in data]
 
 
 def ptb_raw_data(data_path=None):
@@ -135,6 +130,7 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
   Raises:
     tf.errors.InvalidArgumentError: if batch_size or num_steps are too high.
   """
+  #print(len(raw_data))
   with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
     raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
 
