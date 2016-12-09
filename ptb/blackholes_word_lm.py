@@ -63,6 +63,8 @@ import tensorflow as tf
 import rnn_cell
 import reader
 import os
+import reader_words
+import csv
 
 flags = tf.flags
 logging = tf.logging
@@ -96,7 +98,7 @@ class PTBInput(object):
     self.num_steps = num_steps = config.num_steps
     #print(len(data), batch_size, num_steps)
     self.epoch_size = ((len(data) // batch_size) - 1) // num_steps
-    self.input_data, self.targets = reader.ptb_producer(data, batch_size, num_steps, name=name)
+    self.input_data, self.targets = reader_words.ptb_producer(data, batch_size, num_steps, name=name)
 
 
 
@@ -218,8 +220,8 @@ class SmallConfig(object):
   num_layers = 2
   num_steps = 10
   hidden_size = 500
-  max_epoch = 4
-  max_max_epoch = 0
+  max_epoch = 10
+  max_max_epoch = 10
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -312,12 +314,19 @@ def run_epoch(session, model, eval_op=None, verbose=False):
 
 def create_test_data(data):
     data = [str(item) for item in data]
-    sentences = [item for item in ' '.join(data).split('10001') if item]
+    sentences = [item for item in ' '.join(data).split('10001')]
     sentences = [words.split() for words in sentences]
     for (i,sentence) in enumerate(sentences):
         for (j,word) in enumerate(sentence):
             sentences[i][j] = int(word)
     return sentences
+
+'''def create_test_data(data):
+    data = [str(item) for item in data]
+    sentences = [item for item in ' '.join(data).split('<eos>') if item]
+    sentences = [words.split() for words in sentences]
+    print(len(sentences), sentences[0])
+    return sentences'''
 
 #test_perplexity, states = run_epoch(session, mtest)
 
@@ -339,7 +348,8 @@ def main(_):
   if not FLAGS.data_path:
     raise ValueError("Must set --data_path to PTB data directory")
 
-  raw_data = reader.blackholes_raw_data(FLAGS.data_path)
+#raw_data = reader.blackholes_raw_data(FLAGS.data_path)
+  raw_data = reader_words.ptb_raw_data(FLAGS.data_path)
   train_data, valid_data, test_data = raw_data
 
   config = get_config()
@@ -368,7 +378,7 @@ def main(_):
       models = []
       test_sentences = create_test_data(test_data)
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
-          for sentence in test_sentences:
+          for sentence in test_sentences[:25]:
               test_input = PTBInput(config=eval_config, data=sentence, name="TestInput")
               mtest = PTBModel(is_training=False, config=eval_config,
                          input_= test_input)
@@ -394,11 +404,17 @@ def main(_):
 #print("Test Perplexity: %.3f" % test_perplexity)
 #print(states[0].shape, states[1].shape)
 
+      resultFile = open("word_outputs.csv",'w')
+      wr = csv.writer(resultFile, dialect='excel')
       for (model, sentence) in zip(models,test_sentences):
         model_input = model[1]
         model = model[0]
         test_perplexity, states = run_epoch(session, model)
-        print(states.shape)
+        wr.writerow(states.tolist()[0])
+        #except:
+#print("error, length of sentence %d" % len(sentence))
+
+
 
 #if FLAGS.save_path:
 #print("Saving model to %s." % FLAGS.save_path)

@@ -71,18 +71,13 @@ def _file_to_word_ids(filename):
 
 def ptb_raw_data(data_path=None):
   """Load PTB raw data from data directory "data_path".
-
   Reads PTB text files, converts strings to integer ids,
   and performs mini-batching of the inputs.
-
   The PTB dataset comes from Tomas Mikolov's webpage:
-
   http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
-
   Args:
     data_path: string path to the directory where simple-examples.tgz has
       been extracted.
-
   Returns:
     tuple (train_data, valid_data, test_data, vocabulary)
     where each of the data objects can be passed to PTBIterator.
@@ -102,13 +97,10 @@ def ptb_raw_data(data_path=None):
 
 def blackholes_raw_data(data_path=None):
   """Load Black Holes raw data from data directory "data_path".
-
   Reads Black Holes clustering ids as integers
-
   Args:
     data_path: string path to the directory where simple-examples.tgz has
       been extracted.
-
   Returns:
     tuple (train_data, valid_data, test_data, vocabulary)
     where each of the data objects can be passed to PTBIterator.
@@ -129,20 +121,16 @@ def blackholes_raw_data(data_path=None):
 
 def ptb_producer(raw_data, batch_size, num_steps, name=None):
   """Iterate on the raw PTB data.
-
   This chunks up raw_data into batches of examples and returns Tensors that
   are drawn from these batches.
-
   Args:
     raw_data: one of the raw data outputs from ptb_raw_data.
     batch_size: int, the batch size.
     num_steps: int, the number of unrolls.
     name: the name of this operation (optional).
-
   Returns:
     A pair of Tensors, each shaped [batch_size, num_steps]. The second element
     of the tuple is the same data time-shifted to the right by one.
-
   Raises:
     tf.errors.InvalidArgumentError: if batch_size or num_steps are too high.
   """
@@ -172,24 +160,19 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
 
 '''def ptb_producer(raw_data, batch_size, num_steps, name=None):
   """Iterate on the raw PTB data.
-
   This chunks up raw_data into batches of examples and returns Tensors that
   are drawn from these batches.
-
   Args:
     raw_data: one of the raw data outputs from ptb_raw_data.
     batch_size: int, the batch size.
     num_steps: int, the number of unrolls.
     name: the name of this operation (optional).
-
   Returns:
     A pair of Tensors, each shaped [batch_size, num_steps]. The second element
     of the tuple is the same data time-shifted to the right by one.
-
   Raises:
     tf.errors.InvalidArgumentError: if batch_size or num_steps are too high.
   """
-
   with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
       #raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
     raw_data = np.array(raw_data)
@@ -197,14 +180,12 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
     batch_len = int(data_len) // batch_size
         #data = tf.reshape(raw_data[0 : batch_size, :],
         #[batch_size, max_document_length])
-
     epoch_size = (batch_len) // num_steps
     assertion = tf.assert_positive(
         epoch_size,
         message="epoch_size == 0, decrease batch_size or num_steps")
     with tf.control_dependencies([assertion]):
       epoch_size = tf.identity(epoch_size, name="epoch_size")
-
 #i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue()
     i = np.random.randint(0,data_len-1)
     x = raw_data[0', :max_document_length-1]
