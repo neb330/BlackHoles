@@ -94,10 +94,10 @@ class PTBInput(object):
   def __init__(self, config, data, name=None):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
-    print(len(data), batch_size, num_steps)
-    self.epize = ((len(data) // batch_size) - 1) // num_steps
-    self.input_data, self.targets = reader.ptb_producer(
-        data, batch_size, num_steps, name=name)
+    #print(len(data), batch_size, num_steps)
+    self.epoch_size = ((len(data) // batch_size) - 1) // num_steps
+    self.input_data, self.targets = reader.ptb_producer(data, batch_size, num_steps, name=name)
+
 
 
 class PTBModel(object):
@@ -159,6 +159,7 @@ class PTBModel(object):
         [tf.ones([batch_size * num_steps], dtype=data_type())])
     self._cost = cost = tf.reduce_sum(loss) / batch_size
     self._final_state = state
+    self._outputs = output
 
     if not is_training:
       return
@@ -182,7 +183,12 @@ class PTBModel(object):
   @property
   def input(self):
     return self._input
-
+  
+  @property
+  def outputs(self):
+    return self._outputs
+  
+  
   @property
   def initial_state(self):
     return self._initial_state
@@ -210,13 +216,13 @@ class SmallConfig(object):
   learning_rate = 0.1
   max_grad_norm = 5
   num_layers = 2
-  num_steps = 99
+  num_steps = 10
   hidden_size = 500
   max_epoch = 4
-  max_max_epoch = 13
+  max_max_epoch = 0
   keep_prob = 1.0
   lr_decay = 0.5
-  batch_size = 1
+  batch_size = 20
   vocab_size = 10002
 
 
@@ -278,10 +284,10 @@ def run_epoch(session, model, eval_op=None, verbose=False):
   fetches = {
       "cost": model.cost,
       "final_state": model.final_state,
+      "outputs" : model.outputs
   }
   if eval_op is not None:
     fetches["eval_op"] = eval_op
-
   for step in range(model.input.epoch_size):
     #feed_dict = {}
     #for i, (c, h) in enumerate(model.initial_state):
@@ -291,6 +297,7 @@ def run_epoch(session, model, eval_op=None, verbose=False):
     vals = session.run(fetches)
     cost = vals["cost"]
     states = vals["final_state"]
+    outputs = vals["outputs"]
 
     costs += cost
     iters += model.input.num_steps
@@ -300,7 +307,19 @@ def run_epoch(session, model, eval_op=None, verbose=False):
             (step * 1.0 / model.input.epoch_size, np.exp(costs / iters),
              iters * model.input.batch_size / (time.time() - start_time)))
 
-  return np.exp(costs / iters), states
+  return np.exp(costs / iters), outputs
+
+
+def create_test_data(data):
+    data = [str(item) for item in data]
+    sentences = [item for item in ' '.join(data).split('10001') if item]
+    sentences = [words.split() for words in sentences]
+    for (i,sentence) in enumerate(sentences):
+        for (j,word) in enumerate(sentence):
+            sentences[i][j] = int(word)
+    return sentences
+
+#test_perplexity, states = run_epoch(session, mtest)
 
 
 def get_config():
@@ -338,8 +357,7 @@ def main(_):
         m = PTBModel(is_training=True, config=config, input_=train_input)
       tf.scalar_summary("Training Loss", m.cost)
       tf.scalar_summary("Learning Rate", m.lr)
-      
-
+    
     with tf.name_scope("Valid"):
       valid_input = PTBInput(config=config, data=valid_data, name="ValidInput")
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
@@ -347,17 +365,20 @@ def main(_):
       tf.scalar_summary("Validation Loss", mvalid.cost)
 
     with tf.name_scope("Test"):
-      test_input = PTBInput(config=config, data=test_data, name="TestInput")
+      models = []
+      test_sentences = create_test_data(test_data)
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
-        mtest = PTBModel(is_training=False, config=eval_config,
-                         input_=test_input)
+          for sentence in test_sentences:
+              test_input = PTBInput(config=eval_config, data=sentence, name="TestInput")
+              mtest = PTBModel(is_training=False, config=eval_config,
+                         input_= test_input)
+              models.append((mtest,test_input))
 
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
   
       for i in range(config.max_max_epoch):
-
-
+          
         lr_decay = config.lr_decay ** max(i - config.max_epoch, 0.0)
         m.assign_lr(session, config.learning_rate * lr_decay)
 
@@ -369,14 +390,19 @@ def main(_):
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
 
-      test_perplexity, states = run_epoch(session, mtest)  #states now has the embeddings
-      print("Test Perplexity: %.3f" % test_perplexity)
-      print(states.get_shape())
+#test_perplexity, states = run_epoch(session, mtest)  #states now has the embeddings
+#print("Test Perplexity: %.3f" % test_perplexity)
+#print(states[0].shape, states[1].shape)
 
-      
-      if FLAGS.save_path:
-        print("Saving model to %s." % FLAGS.save_path)
-        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+      for (model, sentence) in zip(models,test_sentences):
+        model_input = model[1]
+        model = model[0]
+        test_perplexity, states = run_epoch(session, model)
+        print(states.shape)
+
+#if FLAGS.save_path:
+#print("Saving model to %s." % FLAGS.save_path)
+#sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 
 
 if __name__ == "__main__":
