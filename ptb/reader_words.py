@@ -65,7 +65,7 @@ def ptb_raw_data(data_path=None):
 
   train_path = os.path.join(data_path, "rt-polarity-train-shuffled.txt")
   valid_path = os.path.join(data_path, "rt-polarity-test-shuffled.txt")
-  test_path = os.path.join(data_path, "rt-polarity-test.txt")
+  test_path = os.path.join(data_path, "rt-polarity-test-shuffled.txt")
 
   word_to_id = _build_vocab(train_path)
   train_data = _file_to_word_ids(train_path, word_to_id)
