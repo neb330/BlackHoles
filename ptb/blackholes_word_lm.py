@@ -74,6 +74,10 @@ flags.DEFINE_string(
     "A type of model. Possible options are: small, medium, large.")
 flags.DEFINE_string("data_path", None,
                     "Where the training/test data is stored.")
+
+flags.DEFINE_string("data_type", None,
+                    "Either black holes or words.")
+
 timestamp = str(int(time.time()))
 out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
 checkpoints = os.path.abspath(os.path.join(os.path.curdir, out_dir, "checkpoints"))
@@ -96,7 +100,6 @@ class PTBInput(object):
   def __init__(self, config, data, name=None):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
-    #print(len(data), batch_size, num_steps)
     self.epoch_size = ((len(data) // batch_size) - 1) // num_steps
     self.input_data, self.targets = reader_words.ptb_producer(data, batch_size, num_steps, name=name)
 
@@ -116,8 +119,8 @@ class PTBModel(object):
     # Slightly better results can be obtained with forget gate biases
     # initialized to 1 but the hyperparameters of the model would need to be
     # different than reported in the paper.
-    #lstm_cell = rnn_cell.BasicLSTMCell(size, forget_bias=0.0, state_is_tuple=True)
-    lstm_cell = rnn_cell.GRUCell(size)
+    lstm_cell = rnn_cell.BasicLSTMCell(size, forget_bias=0.0, state_is_tuple=True)
+    #lstm_cell = rnn_cell.GRUCell(size)
     if is_training and config.keep_prob < 1:
       lstm_cell = tf.nn.rnn_cell.DropoutWrapper(
           lstm_cell, output_keep_prob=config.keep_prob)
@@ -142,6 +145,8 @@ class PTBModel(object):
     inputs = [tf.squeeze(input_step, [1])
                for input_step in tf.split(1, num_steps, inputs)]
     outputs, state = tf.nn.rnn(cell, inputs, initial_state=self._initial_state)
+    
+    
     '''outputs = []
     state = self._initial_state
     with tf.variable_scope("RNN"):
@@ -161,6 +166,11 @@ class PTBModel(object):
         [tf.ones([batch_size * num_steps], dtype=data_type())])
     self._cost = cost = tf.reduce_sum(loss) / batch_size
     self._final_state = state
+    
+    
+    
+    
+    
     self._outputs = output
 
     if not is_training:
@@ -221,7 +231,7 @@ class SmallConfig(object):
   num_steps = 10
   hidden_size = 500
   max_epoch = 10
-  max_max_epoch = 10
+  max_max_epoch = 4
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -290,26 +300,27 @@ def run_epoch(session, model, eval_op=None, verbose=False):
   }
   if eval_op is not None:
     fetches["eval_op"] = eval_op
-  for step in range(model.input.epoch_size):
-    #feed_dict = {}
-    #for i, (c, h) in enumerate(model.initial_state):
-      #feed_dict[c] = state[i].c
-      #feed_dict[h] = state[i].h
 
-    vals = session.run(fetches)
+
+  for step in range(model.input.epoch_size):
+    feed_dict = {}
+    for i, (c, h) in enumerate(model.initial_state):
+      feed_dict[c] = state[i].c
+      feed_dict[h] = state[i].h
+
+    vals = session.run(fetches, feed_dict)
     cost = vals["cost"]
     states = vals["final_state"]
     outputs = vals["outputs"]
 
     costs += cost
     iters += model.input.num_steps
-    #print(model.input.epoch_size)
     if verbose and step % (model.input.epoch_size // 10) == 10:
       print("%.3f perplexity: %.3f speed: %.0f wps" %
             (step * 1.0 / model.input.epoch_size, np.exp(costs / iters),
              iters * model.input.batch_size / (time.time() - start_time)))
 
-  return np.exp(costs / iters), outputs
+  return np.exp(costs / iters), outputs, states
 
 
 def create_test_data(data):
@@ -317,16 +328,13 @@ def create_test_data(data):
     sentences = [item for item in ' '.join(data).split('10001')]
     sentences = [words.split() for words in sentences]
     for (i,sentence) in enumerate(sentences):
+        if len(sentence) < 2:
+            del sentences[i]
+    for (i,sentence) in enumerate(sentences):
         for (j,word) in enumerate(sentence):
             sentences[i][j] = int(word)
     return sentences
 
-'''def create_test_data(data):
-    data = [str(item) for item in data]
-    sentences = [item for item in ' '.join(data).split('<eos>') if item]
-    sentences = [words.split() for words in sentences]
-    print(len(sentences), sentences[0])
-    return sentences'''
 
 #test_perplexity, states = run_epoch(session, mtest)
 
@@ -347,9 +355,14 @@ def get_config():
 def main(_):
   if not FLAGS.data_path:
     raise ValueError("Must set --data_path to PTB data directory")
+  
+  if FLAGS.data_type == 'black_holes':
+    raw_data = reader.blackholes_raw_data(FLAGS.data_path)
+  elif FLAGS.data_type == 'words':
+    raw_data = reader_words.ptb_raw_data(FLAGS.data_path)
+  else:
+    print("Enter a correct data type -- either black_holes or words.")
 
-#raw_data = reader.blackholes_raw_data(FLAGS.data_path)
-  raw_data = reader_words.ptb_raw_data(FLAGS.data_path)
   train_data, valid_data, test_data = raw_data
 
   config = get_config()
@@ -367,7 +380,7 @@ def main(_):
         m = PTBModel(is_training=True, config=config, input_=train_input)
       tf.scalar_summary("Training Loss", m.cost)
       tf.scalar_summary("Learning Rate", m.lr)
-    
+
     with tf.name_scope("Valid"):
       valid_input = PTBInput(config=config, data=valid_data, name="ValidInput")
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
@@ -378,11 +391,12 @@ def main(_):
       models = []
       test_sentences = create_test_data(test_data)
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
-          for sentence in test_sentences[:25]:
-              test_input = PTBInput(config=eval_config, data=sentence, name="TestInput")
+          for (i, sentence) in enumerate(test_sentences[:100]):
+              eval_config.num_steps = len(sentence) -1
+              test_input = PTBInput(config=eval_config, data=sentence, name=("TestSentence%d" %i))
               mtest = PTBModel(is_training=False, config=eval_config,
                          input_= test_input)
-              models.append((mtest,test_input))
+              models.append((mtest, test_input))
 
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
@@ -393,10 +407,10 @@ def main(_):
         m.assign_lr(session, config.learning_rate * lr_decay)
 
         print("Epoch: %d Learning rate: %.3f" % (i + 1, session.run(m.lr)))
-        train_perplexity, _ = run_epoch(session, m, eval_op=m.train_op,
+        train_perplexity, _, _ = run_epoch(session, m, eval_op=m.train_op,
                                      verbose=True)
         print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
-        valid_perplexity, _ = run_epoch(session, mvalid)
+        valid_perplexity, _, _ = run_epoch(session, mvalid)
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
 
@@ -404,15 +418,20 @@ def main(_):
 #print("Test Perplexity: %.3f" % test_perplexity)
 #print(states[0].shape, states[1].shape)
 
-      resultFile = open("word_outputs.csv",'w')
-      wr = csv.writer(resultFile, dialect='excel')
-      for (model, sentence) in zip(models,test_sentences):
+      arr = np.zeros((len(test_sentences), config.hidden_size))
+      for i, (model, sentence) in enumerate(zip(models,test_sentences)):
         model_input = model[1]
         model = model[0]
-        test_perplexity, states = run_epoch(session, model)
-        wr.writerow(states.tolist()[0])
-        #except:
-#print("error, length of sentence %d" % len(sentence))
+        
+        #With LSTM, states contains a tuple (c,h) for each layer.
+        test_perplexity, outputs, states = run_epoch(session, model)
+        
+        #Here we grab the h value from (c,h) in the last layer
+        arr[i,:] = states[1][1]
+      if FLAGS.data_type == 'black_holes':
+        np.savetxt('black_hole_outputs.csv', arr, delimiter=',')
+      elif FLAGS.data_type == 'words':
+        np.savetxt('word_outputs.csv', arr, delimiter=',')
 
 
 

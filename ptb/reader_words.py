@@ -92,7 +92,7 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
   """
   with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
     raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
-
+    
     data_len = tf.size(raw_data)
     batch_len = data_len // batch_size
     data = tf.reshape(raw_data[0 : batch_size * batch_len],
