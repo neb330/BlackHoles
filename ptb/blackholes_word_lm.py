@@ -67,22 +67,17 @@ import os
 flags = tf.flags
 logging = tf.logging
 
-flags.DEFINE_string(
-    "model", "small",
-    "A type of model. Possible options are: small, medium, large.")
-flags.DEFINE_string("data_path", None,
-                    "Where the training/test data is stored.")
+flags.DEFINE_string("model", "small", "A type of model. Possible options are: small, medium, large.")
+flags.DEFINE_string("data_path", None, "Where the training/test data is stored.")
+
 timestamp = str(int(time.time()))
 out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
 checkpoints = os.path.abspath(os.path.join(os.path.curdir, out_dir, "checkpoints"))
-flags.DEFINE_string("save_path", checkpoints,
-                    "Model output directory.")
 
-flags.DEFINE_bool("use_fp16", False,
-                  "Train using 16-bit floats instead of 32bit floats")
+flags.DEFINE_string("save_path", checkpoints, "Model output directory.")
+flags.DEFINE_bool("use_fp16", False, "Train using 16-bit floats instead of 32bit floats")
 
 FLAGS = flags.FLAGS
-
 
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
@@ -105,6 +100,7 @@ class PTBModel(object):
 
   def __init__(self, is_training, config, input_):
     self._input = input_
+  
 
     batch_size = input_.batch_size
     num_steps = input_.num_steps
@@ -117,8 +113,8 @@ class PTBModel(object):
     #lstm_cell = rnn_cell.BasicLSTMCell(size, forget_bias=0.0, state_is_tuple=True)
     lstm_cell = rnn_cell.GRUCell(size)
     if is_training and config.keep_prob < 1:
-      lstm_cell = tf.nn.rnn_cell.DropoutWrapper(
-          lstm_cell, output_keep_prob=config.keep_prob)
+      lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, \
+                                                output_keep_prob=config.keep_prob)
     cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers, state_is_tuple=True)
 
     self._initial_state = cell.zero_state(batch_size, data_type())
@@ -140,6 +136,8 @@ class PTBModel(object):
     inputs = [tf.squeeze(input_step, [1])
                for input_step in tf.split(1, num_steps, inputs)]
     outputs, state = tf.nn.rnn(cell, inputs, initial_state=self._initial_state)
+    print("outputs len %d" % len(outputs))
+    print("state len %d" % len(state))
     '''outputs = []
     state = self._initial_state
     with tf.variable_scope("RNN"):
@@ -149,8 +147,8 @@ class PTBModel(object):
         outputs.append(cell_output)'''
 
     output = tf.reshape(tf.concat(1, outputs), [-1, size])
-    softmax_w = tf.get_variable(
-        "softmax_w", [size, vocab_size], dtype=data_type())
+    print("output shape %s" % output.get_shape())
+    softmax_w = tf.get_variable("softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
     logits = tf.matmul(output, softmax_w) + softmax_b
     loss = tf.nn.seq2seq.sequence_loss_by_example(
@@ -166,8 +164,7 @@ class PTBModel(object):
 
     self._lr = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars),
-                                      config.max_grad_norm)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), config.max_grad_norm)
     optimizer = tf.train.GradientDescentOptimizer(self._lr)
     self._train_op = optimizer.apply_gradients(
         zip(grads, tvars),
@@ -176,6 +173,8 @@ class PTBModel(object):
     self._new_lr = tf.placeholder(
         tf.float32, shape=[], name="new_learning_rate")
     self._lr_update = tf.assign(self._lr, self._new_lr)
+
+    # self._saver = tf.train.Saver(tf.all_variables())
 
   def assign_lr(self, session, lr_value):
     session.run(self._lr_update, feed_dict={self._new_lr: lr_value})
@@ -209,6 +208,9 @@ class PTBModel(object):
   def train_op(self):
     return self._train_op
 
+  # @property
+  # def saver(self):
+  #   return self._saver
 
 class SmallConfig(object):
   """Small config."""
@@ -218,7 +220,7 @@ class SmallConfig(object):
   num_layers = 2
   num_steps = 10
   hidden_size = 500
-  max_epoch = 4
+  max_epoch = 1
   max_max_epoch = 0
   keep_prob = 1.0
   lr_decay = 0.5
@@ -370,14 +372,13 @@ def main(_):
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
           for sentence in test_sentences:
               test_input = PTBInput(config=eval_config, data=sentence, name="TestInput")
-              mtest = PTBModel(is_training=False, config=eval_config,
-                         input_= test_input)
+              mtest = PTBModel(is_training=False, config=eval_config, input_=test_input)
               models.append((mtest,test_input))
 
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
   
-      for i in range(config.max_max_epoch):
+      for i in range(config.max_epoch):
           
         lr_decay = config.lr_decay ** max(i - config.max_epoch, 0.0)
         m.assign_lr(session, config.learning_rate * lr_decay)
@@ -394,15 +395,15 @@ def main(_):
 #print("Test Perplexity: %.3f" % test_perplexity)
 #print(states[0].shape, states[1].shape)
 
-      for (model, sentence) in zip(models,test_sentences):
-        model_input = model[1]
-        model = model[0]
-        test_perplexity, states = run_epoch(session, model)
-        print(states.shape)
-
-#if FLAGS.save_path:
-#print("Saving model to %s." % FLAGS.save_path)
-#sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+      # for (model, sentence) in zip(models, test_sentences):
+      #   model_input = model[1]
+      #   model = model[0]
+      #   test_perplexity, states = run_epoch(session, model)
+      #   print(states.shape)
+      #   #print(states)
+      if FLAGS.save_path:
+        print("Saving model to %s." % FLAGS.save_path)
+        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 
 
 if __name__ == "__main__":
