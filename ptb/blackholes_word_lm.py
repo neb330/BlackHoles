@@ -166,11 +166,6 @@ class PTBModel(object):
         [tf.ones([batch_size * num_steps], dtype=data_type())])
     self._cost = cost = tf.reduce_sum(loss) / batch_size
     self._final_state = state
-    
-    
-    
-    
-    
     self._outputs = output
 
     if not is_training:
@@ -228,10 +223,10 @@ class SmallConfig(object):
   learning_rate = 0.1
   max_grad_norm = 5
   num_layers = 2
-  num_steps = 10
+  num_steps = 20
   hidden_size = 500
-  max_epoch = 10
-  max_max_epoch = 4
+  max_epoch = 15
+  max_max_epoch = 15
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -248,7 +243,7 @@ class MediumConfig(object):
   hidden_size = 650
   max_epoch = 6
   max_max_epoch = 39
-  keep_prob = 0.5
+  keep_prob = 1.0
   lr_decay = 0.8
   batch_size = 10
   vocab_size = 10002
@@ -391,7 +386,7 @@ def main(_):
       models = []
       test_sentences = create_test_data(test_data)
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
-          for (i, sentence) in enumerate(test_sentences[:100]):
+          for (i, sentence) in enumerate(test_sentences):
               eval_config.num_steps = len(sentence) -1
               test_input = PTBInput(config=eval_config, data=sentence, name=("TestSentence%d" %i))
               mtest = PTBModel(is_training=False, config=eval_config,
@@ -414,11 +409,7 @@ def main(_):
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
 
-#test_perplexity, states = run_epoch(session, mtest)  #states now has the embeddings
-#print("Test Perplexity: %.3f" % test_perplexity)
-#print(states[0].shape, states[1].shape)
-
-      arr = np.zeros((len(test_sentences), config.hidden_size))
+      arr = np.zeros((61, config.hidden_size))
       for i, (model, sentence) in enumerate(zip(models,test_sentences)):
         model_input = model[1]
         model = model[0]
@@ -426,18 +417,24 @@ def main(_):
         #With LSTM, states contains a tuple (c,h) for each layer.
         test_perplexity, outputs, states = run_epoch(session, model)
         
+        #We can average over the outputs array, which is of size [len(sentence),hidden_size]
+        final_outputs = outputs.mean(0)
+        arr[i,:] = final_outputs
+        
         #Here we grab the h value from (c,h) in the last layer
-        arr[i,:] = states[1][1]
+        #arr[i,:] = states[1][1]
       if FLAGS.data_type == 'black_holes':
         np.savetxt('black_hole_outputs.csv', arr, delimiter=',')
       elif FLAGS.data_type == 'words':
         np.savetxt('word_outputs.csv', arr, delimiter=',')
 
 
+      test_perplexity, outputs, states = run_epoch(session, mtest)  #states now has the embeddings
+      print("Test Perplexity: %.3f" % test_perplexity)
 
-#if FLAGS.save_path:
-#print("Saving model to %s." % FLAGS.save_path)
-#sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+      if FLAGS.save_path:
+        print("Saving model to %s." % FLAGS.save_path)
+        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 
 
 if __name__ == "__main__":
