@@ -409,7 +409,7 @@ def main(_):
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
 
-      arr = np.zeros((61, config.hidden_size))
+      arr = np.zeros((len(test_sentences), config.hidden_size))
       for i, (model, sentence) in enumerate(zip(models,test_sentences)):
         model_input = model[1]
         model = model[0]
