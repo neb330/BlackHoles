@@ -2,9 +2,9 @@ import csv
 
 def pad(lst, size, sym):
   if len(lst) < size:
-    return lst[:-1] + [sym for i in range(size - len(lst))] + [10001]
+    return lst[:-1] + [sym for i in range(size - len(lst))]
   elif len(lst) > size:
-    return lst[:(size-1)] + [10001]
+    return lst[:(size-1)]
   else:
     return lst 
 
