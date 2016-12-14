@@ -226,7 +226,7 @@ class SmallConfig(object):
   num_steps = 100
   hidden_size = 500
   max_epoch = 15
-  max_max_epoch = 15
+  max_max_epoch = 12
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -296,7 +296,7 @@ def run_epoch(session, model, eval_op=None, verbose=False, is_testing = False):
   if eval_op is not None:
     fetches["eval_op"] = eval_op
 
-
+  arr = np.zeros((model.input.epoch_size + 1, 500))
   for step in range(model.input.epoch_size):
     feed_dict = {}
     for i, (c, h) in enumerate(model.initial_state):
@@ -312,9 +312,8 @@ def run_epoch(session, model, eval_op=None, verbose=False, is_testing = False):
     iters += model.input.num_steps
 
     if is_testing:
-        print(outputs.shape)
-        #final_outputs = outputs.mean(0)
-        #arr[step,:] = final_outputs
+        final_outputs = outputs.mean(0)
+        arr[step,:] = final_outputs
 
     if verbose and step % (model.input.epoch_size // 10) == 10:
         print("%.3f perplexity: %.3f speed: %.0f wps" %
@@ -391,7 +390,7 @@ def main(_):
 
 
     with tf.name_scope("Test"):
-      test_input = PTBInput(config=eval_config, data=test_data, name=("TestInput")
+      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
         mtest = PTBModel(is_training=False, config=eval_config, input_= test_input)
                             
