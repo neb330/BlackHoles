@@ -222,11 +222,11 @@ class SmallConfig(object):
   init_scale = 0.1
   learning_rate = 0.1
   max_grad_norm = 5
-  num_layers = 2
+  num_layers = 1
   num_steps = 100
-  hidden_size = 500
+  hidden_size = 200
   max_epoch = 15
-  max_max_epoch = 12
+  max_max_epoch = 1
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -296,7 +296,7 @@ def run_epoch(session, model, eval_op=None, verbose=False, is_testing = False):
   if eval_op is not None:
     fetches["eval_op"] = eval_op
 
-  arr = np.zeros((model.input.epoch_size + 1, 500))
+  arr = np.zeros((model.input.epoch_size + 1, 200))
   for step in range(model.input.epoch_size):
     feed_dict = {}
     for i, (c, h) in enumerate(model.initial_state):
@@ -397,7 +397,9 @@ def main(_):
 
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
-  
+        
+      train = []
+      dev = []
       for i in range(config.max_max_epoch):
           
         lr_decay = config.lr_decay ** max(i - config.max_epoch, 0.0)
@@ -407,19 +409,30 @@ def main(_):
         train_perplexity, _, _ = run_epoch(session, m, eval_op=m.train_op,
                                      verbose=True)
         print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
+        train.append(train_perplexity)
         valid_perplexity, _, _ = run_epoch(session, mvalid)
+        dev.append(valid_perplexity)
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
       
        
-      test_perplexity, arr, states = run_epoch(session, mtest, is_testing= True)
-      print("Test Perplexity: %.3f" % test_perplexity)
+      '''test_perplexity, arr, states = run_epoch(session, mtest, is_testing= True)
+      print("Test Perplexity: %.3f" % test_perplexity)'''
     
       if FLAGS.data_type == 'black_holes':
-        print("Saving outputs (%d,%d) to black_hole_outputs.csv" % (arr.shape[0],arr.shape[1]))
-        np.savetxt('black_hole_outputs.csv', arr, delimiter=',')
+          #print("Saving outputs (%d,%d) to black_hole_outputs.csv" % (arr.shape[0],arr.shape[1]))
+        #np.savetxt('black_hole_outputs.csv', arr, delimiter=',')
+        print("Saving train and valid perplexity to black_hole_perplexity.csv")
+        with open('black_hole_perplexity.csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(zip(train, dev))
+
       elif FLAGS.data_type == 'words':
         print("Saving outputs (%d,%d) to word_outputs.csv" % (arr.shape[0],arr.shape[1]))
         np.savetxt('word_outputs.csv', arr, delimiter=',')
+        print("Saving train and valid perplexity to words_perplexity.csv")
+        with open('words_perplexity.csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(zip(train, dev))
 
 
       if FLAGS.save_path:
